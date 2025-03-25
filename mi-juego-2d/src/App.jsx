@@ -8,11 +8,10 @@ function App() {
     <div className="App">
     <header>
       <h1>Galactic Cleaner</h1>
-      <div id="score">Puntuación: 0</div>
     </header>
     <GameCanvas/>
     <footer>
-      <p>Creado por [Luis Rodrigo Del Villar Morales y  ]</p>
+      <p>Creado por [Luis Rodrigo Del Villar Morales y Lizeth Anahí Gonzalez Ordaz]</p>
     </footer>
     </div>
   )

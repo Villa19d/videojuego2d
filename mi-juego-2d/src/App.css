@@ -5,8 +5,8 @@
   text-align: center;
 }
 
-canvas {
-  cursor: url('assets/images/cursor.png'), auto;
+.canvas-cursor {
+  cursor: url('/src/assets/images/laser-cursor.png'), auto;
 }
 
 @keyframes logo-spin {

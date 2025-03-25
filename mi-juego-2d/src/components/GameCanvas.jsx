@@ -2,7 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import AsteroidesImg from '../assets/images/Asteroide.png'; // Importación directa
 import AstronautaImg from '../assets/images/astronauta.png';
 import LaserCursor from '../assets/images/laser-cursor.png';
-import LaserBeam from '../assets/images/laser-beam.png';
+import SpaceBg from '../assets/images/bg.avif';
+import BackgroundMusic from '../assets/audio/Background.mp3';
+import LaserSound from '../assets/audio/laser.mp3';
 
 const GameCanvas = () => {
     const canvasRef = useRef(null);
@@ -12,7 +14,6 @@ const GameCanvas = () => {
     const assetsLoaded = useRef(false);
     const animationFrameId = useRef(null);
     const asteroidIntervalId = useRef(null);
-    const difficultyTimer = useRef(0);
     const asteroidSpawnRate = useRef(1000); // Empieza generando cada 1 segundo
     
     const config = {
@@ -22,14 +23,47 @@ const GameCanvas = () => {
       asteroidMinSize: 30,
       asteroidMaxSize: 60
     };
+
+    const audioRef = useRef({
+        bgMusic: new Audio(BackgroundMusic),
+        laser: new Audio(LaserSound)
+      });
+
+   
   
     useEffect(() => {
       const canvas = canvasRef.current;
       if (!canvas) return; // Protección adicional
-      
-      const ctx = canvas.getContext('2d');
-      canvas.width = config.canvasWidth;
-      canvas.height = config.canvasHeight;
+
+      // Agrega esto al inicio del useEffect (después de obtener el contexto)
+      const startMusic = () => {
+            try {
+            audioRef.current.bgMusic.volume = 0.3;
+            audioRef.current.bgMusic.loop = true;
+            // Intenta reproducir y si falla por políticas de autoplay, muestra un botón
+            const playPromise = audioRef.current.bgMusic.play();
+            
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                // Crea un botón para iniciar la música
+                const musicButton = document.createElement('button');
+                musicButton.textContent = 'Activar música';
+                musicButton.style.position = 'fixed';
+                musicButton.style.bottom = '20px';
+                musicButton.style.right = '20px';
+                musicButton.style.zIndex = '1000';
+                musicButton.onclick = () => {
+                    audioRef.current.bgMusic.play();
+                    musicButton.remove();
+                };
+                document.body.appendChild(musicButton);
+                });
+            }
+            } catch (e) {
+            console.error("Error con audio:", e);
+            }
+      };
+        
   
       const images = {
         asteroid: new Image(),
@@ -55,6 +89,16 @@ const GameCanvas = () => {
       
       images.cursor.onload = checkAssetsLoaded;
       images.cursor.src = LaserCursor;
+
+       // Llama a la función después de cargar los assets
+       images.astronaut.onload = () => {
+        checkAssetsLoaded();
+        startMusic(); // Inicia la música cuando todo esté listo
+       };
+
+      const ctx = canvas.getContext('2d');
+      canvas.width = config.canvasWidth;
+      canvas.height = config.canvasHeight;
   
       const astronaut = {
         x: config.canvasWidth / 2 - config.astronautSize / 2,
@@ -72,41 +116,59 @@ const GameCanvas = () => {
 
       
   
-      const generateAsteroid = () => {
+   
+       const generateAsteroid = () => {
         const side = Math.floor(Math.random() * 4);
         let x, y;
         
+        // Posición inicial según el borde de aparición
         switch(side) {
-          case 0: x = Math.random() * config.canvasWidth; y = -50; break;
-          case 1: x = config.canvasWidth + 50; y = Math.random() * config.canvasHeight; break;
-          case 2: x = Math.random() * config.canvasWidth; y = config.canvasHeight + 50; break;
-          case 3: x = -50; y = Math.random() * config.canvasHeight; break;
+          case 0: x = Math.random() * config.canvasWidth; y = -50; break;       // Arriba
+          case 1: x = config.canvasWidth + 50; y = Math.random() * config.canvasHeight; break;  // Derecha
+          case 2: x = Math.random() * config.canvasWidth; y = config.canvasHeight + 50; break;  // Abajo
+          case 3: x = -50; y = Math.random() * config.canvasHeight; break;      // Izquierda
         }
-  
+      
+        // Cálculo de tamaño y velocidad (ajustado por dificultad)
         const size = config.asteroidMinSize + Math.random() * (config.asteroidMaxSize - config.asteroidMinSize);
-        const speed = 1 + Math.random() * 2;
-  
+        const baseSpeed = 1 + (score / 500); // Velocidad aumenta con el puntaje
+        const speedVariation = 0.5 + Math.random() * 1.5; // Variación aleatoria
+      
         return {
           x,
           y,
           size,
-          speedX: (config.canvasWidth/2 - x) / config.canvasWidth * speed,
-          speedY: (config.canvasHeight/2 - y) / config.canvasHeight * speed
+          speedX: (config.canvasWidth/2 - x) / config.canvasWidth * baseSpeed * speedVariation,
+          speedY: (config.canvasHeight/2 - y) / config.canvasHeight * baseSpeed * speedVariation
         };
       };
-  
+
+      const spawnAsteroid = () => {
+        if (!gameOver) {
+          asteroidsRef.current = [...asteroidsRef.current, generateAsteroid()];
+          const nextDelay = Math.max(200, 1000 - (score * 0.1)); // Ajuste fino basado en puntaje
+          setTimeout(spawnAsteroid, nextDelay);
+        }
+      }; spawnAsteroid();
+      
+      let floatOffset = 0;
+      let floatDirection = 1;
       const drawAstronaut = () => {
+        // Animación de flotar
+        floatOffset += 0.05 * floatDirection;
+        if (Math.abs(floatOffset) > 3) floatDirection *= -1;
+
         if (assetsLoaded.current) {
-          ctx.drawImage(
+            ctx.drawImage(
             images.astronaut,
             astronaut.x,
-            astronaut.y,
+            astronaut.y + floatOffset, // Añade el offset vertical
             astronaut.size,
             astronaut.size
-          );
+            );
         } else {
-          ctx.fillStyle = 'blue';
-          ctx.fillRect(astronaut.x, astronaut.y, astronaut.size, astronaut.size);
+            ctx.fillStyle = 'blue';
+            ctx.fillRect(astronaut.x, astronaut.y + floatOffset, astronaut.size, astronaut.size);
         }
       };
   
@@ -215,6 +277,9 @@ const GameCanvas = () => {
   
       const handleClick = (e) => {
         if (gameOver) return;
+         // Sonido de disparo
+         audioRef.current.laser.currentTime = 0; // Rebobina si ya estaba sonando
+         audioRef.current.laser.play();
         
         const rect = canvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
@@ -232,16 +297,37 @@ const GameCanvas = () => {
           laser.active = false;
         }, 100);
       };
-  
-      const handleMouseMove = (e) => {
-        canvas.style.cursor = `url(${LaserCursor}), auto`;
+
+      const loadCursor = () => {
+        const cursorImg = new Image();
+        cursorImg.src = LaserCursor;
+        return cursorImg;
+      };
+      const cursorImg = loadCursor();
+
+      const handleMouseMove = () => {
+        canvas.style.cursor = `url("../assets/images/laser-cursor.png")`;
+      };
+
+      // Para restaurar el cursor
+      const handleMouseLeave = () => {
+        canvas.style.cursor = 'default';
       };
   
       canvas.addEventListener('click', handleClick);
       canvas.addEventListener('mousemove', handleMouseMove);
-  
+      canvas.addEventListener('mouseleave', handleMouseLeave);
+      
+      
       const gameLoop = (timestamp) => {
         if (gameOver) return;
+
+        let lastDifficultyUpdate = 0;
+        const difficultyIncreaseInterval = 30000; // 30 segundos
+        // Aumentar dificultad cada X tiempo
+       if(timestamp - lastDifficultyUpdate > difficultyIncreaseInterval){
+        asteroidSpawnRate.current = Math.max(200, asteroidSpawnRate.current - 100);
+        lastDifficultyUpdate = timestamp;}
         
         ctx.clearRect(0, 0, config.canvasWidth, config.canvasHeight);
         
@@ -272,6 +358,14 @@ const GameCanvas = () => {
       }, 1000);
   
       return () => {
+         // Limpia audio
+         audioRef.current.bgMusic.pause();
+         audioRef.current.bgMusic.currentTime = 0;
+
+         //Limpia mouse
+        canvas.removeEventListener('mouseleave', handleMouseLeave);
+
+
         if (animationFrameId.current) {
           cancelAnimationFrame(animationFrameId.current);
         }
@@ -286,15 +380,26 @@ const GameCanvas = () => {
     if (gameOver) {
       return (
         <div style={{
-          textAlign: 'center',
-          color: 'white',
-          backgroundColor: 'black',
-          height: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          alignItems: 'center'
-        }}>
+      textAlign: 'center',
+      color: 'white',
+      height: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      background: `linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)`,
+      position: 'relative'
+    }}>
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: `url(${SpaceBg}) center/cover no-repeat`,
+        opacity: 0.5,
+        zIndex: -1
+      }} />
           <h1 style={{ fontSize: '3rem' }}>¡GAME OVER!</h1>
           <h2 style={{ fontSize: '2rem' }}>Puntuación final: {score}</h2>
           <button 
@@ -320,11 +425,16 @@ const GameCanvas = () => {
       <div style={{ textAlign: 'center' }}>
         <canvas 
           ref={canvasRef} 
-          style={{ 
-            background: 'black',
+          className="canvas-cursor"
+          style={{
+            background: `url(${SpaceBg}) center/cover no-repeat`,
             display: 'block',
             margin: '0 auto',
-            border: '2px solid #444'
+            border: '2px solid #444',
+            cursor: `url("../assets/images/laser-cursor.png"), auto` // Cursor por defecto
+        }}
+        onMouseEnter={() => {
+            canvasRef.current.style.cursor = `url("../assets/images/laser-cursor.png"), auto`;
           }}
         />
         <div style={{ 
